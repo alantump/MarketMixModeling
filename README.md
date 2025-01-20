@@ -16,4 +16,4 @@ The benefits of Baysian Frameworks is:
 - R and RStudio installed on your machine.
 - Required R packages: `datarium`, `tidyr`, `PerformanceAnalytics`, `ggplot2`, `prophet`, `dplyr`, `brms`.
 
-Check out the html file `tidyr` for the results and `tidyr` for the code. 
+Check out the html file `Market_mix_modeling.html` for the results and `Market_mix_modeling.Rmd` for the code. 
