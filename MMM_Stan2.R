@@ -414,7 +414,17 @@ hist(apply(1-(samples$media_contr[,,2]/samples$tot),2, mean))
 hist(apply(1-(samples$media_contr[,,1]/samples$tot),2, mean))
 
 
-data.frame(time = data$week_dt2,
+
+plag <- data.frame(decay = apply(samples$decay,2, mean), max_lag = 10, group=c("TV", "Radio", "News Paper")) %>% 
+  mutate(lag_w = map(decay, ~ .x^seq(0,10, by=0.2)/sum(.x^seq(0,10, by=0.2))),
+                                                              time = map(decay, ~ seq(0,10, by=0.2))) %>% unnest() %>%
+  ggplot(aes(time, lag_w, color=group, group= group)) + geom_line(, size=1.2)   +theme_minimal() + ylab("Weight") + xlab("Lag") +
+ theme(legend.position = c(0.8, 0.8), legend.title = element_blank()) 
+ggsave("plots/lag_mmm_data.png",plag, width = 3, height = 3)
+
+
+
+p_prop <- data.frame(time = data$week_dt2,
            prop_tv = apply(1-(samples$media_contr[,,1]/samples$tot),2, mean),
            prop_radio = apply(1-(samples$media_contr[,,2]/samples$tot),2, mean),
            prop_np = apply(1-(samples$media_contr[,,3]/samples$tot),2, mean),
@@ -426,7 +436,8 @@ data.frame(time = data$week_dt2,
   viridis::scale_fill_viridis(discrete = T, name = "", labels = c("Other", "TV", "Radio", "News Paper")) + 
   ggtitle("Sales contribution") +theme_minimal() + geom_smooth(aes(color=group), se = F) + 
   viridis::scale_color_viridis(discrete = T, name = "", labels = c("Other", "TV", "Radio", "News Paper")) +
-  ylab("Proportion")
+  ylab("Relative contribution to sales")
+ggsave("plots/contribution_mmm_data.png",p_prop, width = 6, height = 3)
 
 
 
@@ -493,10 +504,6 @@ mean(hill_data$TV_func[hill_data$TV!=0]/hill_data$TV[hill_data$TV!=0])
 mean(hill_data$Radio_func[hill_data$radio!=0]/hill_data$radio[hill_data$radio!=0])
 mean(hill_data$NP_func[hill_data$newspaper!=0]/hill_data$newspaper[hill_data$newspaper!=0])
 
-hill_data %>% ggplot(aes(x=TV, y=TV_func))  + geom_line()
-hill_data %>% ggplot(aes(x=radio, y=Radio_func))  + geom_line()
-hill_data %>% ggplot(aes(x=newspaper, y=NP_func))  + geom_line()
-
 
 df1 = hill_data %>%
   pivot_longer(
@@ -540,7 +547,7 @@ p2 <- df1 %>% select(values1, grouping_variable) %>%
   xlab("Investment in chanel") +
 facet_wrap(vars(grouping_variable),scales="free_x") 
 p2
-ggsave("plots/roi_mmm_data.png",p_hill, width = 3, height = 3)
+ggsave("plots/roi_mmm_data.png",p2, width = 3, height = 3)
 
 
 

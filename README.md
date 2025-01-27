@@ -193,4 +193,4 @@ The benefits of Bayesian frameworks include:
 - R and RStudio installed on your machine.
 - Required R packages: `datarium`, `tidyr`, `PerformanceAnalytics`, `ggplot2`, `rstan`, `dplyr`, and others.
 
-Check out the HTML file `Market_mix_modeling.html` for the results and `Market_mix_modeling.Rmd` for the code.
+Check out the HTML file `NNN_Stan2` for the code and `Market_mix_modeling.Rmd` for a analysis with BRMS.
