@@ -1,72 +1,66 @@
-# Using RStan for a Bayesian Approach for Media Mix Modeling with Carryover and Shape Effects
 
-This project is influenced by the model descriptions provided by Jin et al., 2017 (link). This project is implemented in R but could be implemented easily in Python. 
+# Using RStan for a Bayesian Approach to Media Mix Modeling with Carryover and Shape Effects
+
+This project is inspired by the model descriptions provided by Jin et al., 2017. It is implemented in R but can be easily adapted to Python.
 
 ## Project Overview
 
-In this project I will:
-1. Show  how to fit a Bayesain MMM model to estimate chanel contributions to sales with Carryover and Shape Effects.
-2. Show how to calculate important KPIs.
-3. Discuss the results and investment optimization. 
-
+In this project, I will:
+1. Demonstrate how to fit a Bayesian Media Mix Model (MMM) to estimate channel contributions to sales, incorporating Carryover and Shape Effects.
+2. Show how to calculate important Key Performance Indicators (KPIs).
+3. Discuss the results and investment optimization strategies.
 
 ## Introduction
 
-Marketing Mix Model, or Media Mix Model (MMM) is used by advertisers to measure how their media spending contributes to sales. In the classical framework media contributions are estimated via a linear regression approeach, whereby the beta estimates of the media chanels describe their contribution: 
+Marketing Mix Modeling, or Media Mix Modeling (MMM), is used by advertisers to measure how their media spending contributes to sales. In the classical framework, media contributions are estimated via a linear regression approach, where the beta estimates of the media channels describe their contribution:
 
-
-![alt text](image.png)
-
+![Media Contribution](image.png)
 
 ## Addstock
 
-More sofisticated models assume that the the effect of media spendings is not only emidiate but can lag behing. For example, a TV advertisement breadcasted a few weeks ago could still have a positive influece on sales today. This Caryover effect in advertisign is modeled via an adstock function:
-![alt text](image-2.png)
-with *w* being a weight for different lags *l*. 
+More sophisticated models assume that the effect of media spending is not immediate but can lag. For example, a TV advertisement broadcasted a few weeks ago could still positively influence sales today. This Carryover effect in advertising is modeled via an adstock function:
 
+![Adstock Function](image-2.png)
 
+with *w* being a weight for different lags *l*.
 
-The weights (*w*) are described by a decay function. The lower the decay parameter &alpha;, the longer is the effect of an advertisment lasting:   
+The weights (*w*) are described by a decay function. The lower the decay parameter &alpha;, the longer the effect of an advertisement lasts:
 
-<img src="image-1.png" alt="alt text" style="width: 80%;">
+<img src="image-1.png" alt="Decay Function" style="width: 80%;">
 
-## Diminushing Returns
+## Diminishing Returns
 
-Another important assumption is that media spending do not necsesarily increase the sales linearly. At some point, each additional dollar spend will have less of an effect. This is described by a Hill-function. 
+Another important assumption is that media spending does not necessarily increase sales linearly. At some point, each additional dollar spent will have less effect. This is described by a Hill function:
 
-![alt text](image-3.png)
+![Hill Function](image-3.png)
 
-with the paramter *K*, describing the half saturation point and *S*, describing the slope.
+with the parameter *K* describing the half-saturation point and *S* describing the slope.
 
-# Model
+## Model
 
-The final model has follwoing paramters:
+The final model has the following parameters:
 
+| Parameter            | Description                                                   | Variable name in model |
+|----------------------|---------------------------------------------------------------|------------------------|
+| Intercept            | Base sales                                                    | *intercept*            |
+| Control betas        | Control variables accounting for other factors such as seasonality | *beta_ctrl*            |
+| Media betas          | Scaling the influence of the media                            | *beta_media*           |
+| Half-saturation point| Describing the investment when half the maximal influence is reached | *ec*                   |
+| Slope                | Describing the shape of the Hill function                     | *slope*                |
 
-| Parameter |  Description |Variable name in model|
-|----------|----------|----------|
-| intercept |  Base sales | *intercept*
-| Control betas |  Control variables accounting for other factors such as seasonality |  *beta_ctrl*|
-| Media betas |  Scaling the influence of the media  | *beta_media*|
-| Half-saturation point |  DEscribing the investment when half the maximal infleuce is reached  | *ec*|
-| Slope |  Describign the shape of the Hill function  | *slope*|
+## Data
 
-# Data
-
-I explored the data posted on this git repository. 
-It is data describing weekly sales over approximatly 4 years with investments into TV, newspaper and radio:
+I explored the data posted on this Git repository. It describes weekly sales over approximately 4 years with investments in TV, newspaper, and radio:
 
 <img src="plots/sales_mmm_data.png" style="width: 80%;">
 
-
-with most of spending being into TV:
+with most spending being on TV:
 
 <img src="plots/investment_mmm_data.png" style="width: 80%;">
 
+We can now model the effect of media spending on sales with our model written in Stan:
 
-Anyway, we can now model the effect of media spending on sales with our model written in stan:
-
-```
+```stan
 functions {
   // the Hill function
   real Hill(real t, real ec, real slope) {
@@ -79,90 +73,55 @@ functions {
 }
 
 data {
-  
   int<lower=1> N;
-  
   real y[N]; // the vector of sales
-  
-  // the maximum duration of lag effect, in weeks
-  int<lower=1> max_lag;
-  
-  // the number of media channels
-  int<lower=1> num_media;
-  
-  // matrix of media variables
-  matrix[N + max_lag -1, num_media] X_media;
-  
-
-  // the number of other control variables
-  int<lower=1> num_ctrl;
-  
-  // a matrix of control variables
-  matrix[N, num_ctrl] X_ctrl;
+  int<lower=1> max_lag; // the maximum duration of lag effect, in weeks
+  int<lower=1> num_media; // the number of media channels
+  matrix[N + max_lag -1, num_media] X_media; // matrix of media variables
+  int<lower=1> num_ctrl; // the number of other control variables
+  matrix[N, num_ctrl] X_ctrl; // a matrix of control variables
 }
 
 parameters {
-  // residual variance
-  real<lower=0> noise_var;
-  
-  // the intercept
-  real intercept;
-  
-  // the coefficients for media variables and base sales
-  vector[num_media] beta_media;
-  vector[num_ctrl] beta_ctrl;
-  
-  // the decay  parameter for the adstock transformation of
-  // each media
-  vector<lower=0,upper=1>[num_media] decay;
-  
-  // hill
-  vector<lower=0>[num_media] ec;
+  real<lower=0> noise_var; // residual variance
+  real intercept; // the intercept
+  vector[num_media] beta_media; // the coefficients for media variables
+  vector[num_ctrl] beta_ctrl; // the coefficients for control variables
+  vector<lower=0,upper=1>[num_media] decay; // the decay parameter for adstock
+  vector<lower=0>[num_media] ec; // hill
   vector<lower=0>[num_media] slope;
-
 }
 
 transformed parameters {
-  // the cumulative media effect after adstock
   real cum_effect;
-  
-
-  // adstock, mean-center, log1p transformation
   row_vector[max_lag] lag_weights;
-  
-  //hill
   matrix[N, num_media] cum_effects_hill;
-  
   real mu[N];
   for (nn in 1:N) {
-    for (media in 1 : num_media) {
-      for (lag in 1 : max_lag) {
+    for (media in 1:num_media) {
+      for (lag in 1:max_lag) {
         lag_weights[lag] <- pow(decay[media], (lag) ^ 2);
       }
       cum_effect <- Adstock(sub_col(X_media, nn, media, max_lag), lag_weights);
       cum_effects_hill[nn, media] <- Hill(cum_effect, ec[media], slope[media]);
-
     }
     mu[nn] <- intercept + dot_product(cum_effects_hill[nn], beta_media) +
     dot_product(X_ctrl[nn], beta_ctrl);
   } 
 }
+
 model {
   decay ~ beta(3,10);
   intercept ~ normal(0, 5);
   beta_media ~ normal(0, 1);
   beta_ctrl ~ normal(0, 1);
   noise_var ~ inv_gamma(0.05, 0.05 * 0.01);
-  
-
-  // hill
   slope ~ normal(1,0.3);
   ec ~ gamma(4, 0.1);
   y ~ normal(mu, sqrt(noise_var));
 }
 
 generated quantities {
-  // for calculating the marginal effects
   real cum_effect2;
   row_vector[max_lag] lag_weights2;
   matrix[N, num_media] cum_effects_hill2;
@@ -171,88 +130,67 @@ generated quantities {
   real contr[N];
   
   for (nn in 1:N) {
-    for (media in 1 : num_media) {
-      for (lag in 1 : max_lag) {
+    for (media in 1:num_media) {
+      for (lag in 1:max_lag) {
         lag_weights2[lag] <- pow(decay[media], (lag) ^ 2);
       }
       cum_effect2 <- Adstock(sub_col(X_media, nn, media, max_lag), lag_weights2);
       cum_effects_hill2[nn, media] <- Hill(cum_effect2, ec[media], slope[media]);
-
     }
-    // predicted sales
     tot[nn] <- intercept + dot_product(cum_effects_hill2[nn], beta_media) +
     dot_product(X_ctrl[nn], beta_ctrl);
-    
-    // predicted sales without media
-    contr[nn] <- intercept +
-    dot_product(X_ctrl[nn], beta_ctrl);
-    
-    // predicted sales without first media
+    contr[nn] <- intercept + dot_product(X_ctrl[nn], beta_ctrl);
     media_contr[nn, 1] <- intercept + dot_product([0, cum_effects_hill2[nn,2],cum_effects_hill2[nn,3]], beta_media) +
     dot_product(X_ctrl[nn], beta_ctrl);
-    
-    // predicted sales without second media
     media_contr[nn, 2] <- intercept + dot_product([cum_effects_hill2[nn,1],0,cum_effects_hill2[nn,3]], beta_media) +
     dot_product(X_ctrl[nn], beta_ctrl);
-    
-    // predicted sales without third media
-    media_contr[nn, 3] <- intercept + dot_product([ cum_effects_hill2[nn,1],cum_effects_hill2[nn,2],0], beta_media) +
+    media_contr[nn, 3] <- intercept + dot_product([cum_effects_hill2[nn,1],cum_effects_hill2[nn,2],0], beta_media) +
     dot_product(X_ctrl[nn], beta_ctrl);
-    
-
   } 
-
 }
 ```
 
-# Results
-Let's shortly disucuss the results. 
+## Results
 
-### Sales contribution
+### Sales Contribution
 
-1.  About 30% if the sales cannot be attributed to media spendings.
-2. TV has the highest contribution to sales with on average about 40%.
-3. Radio and newspaper have less contribution on sales with newspaper only contributing a few percent.
+1. About 30% of the sales cannot be attributed to media spending.
+2. TV has the highest contribution to sales, averaging about 40%.
+3. Radio and newspaper have less contribution, with newspaper contributing only a few percent.
 
 <img src="plots/contribution_mmm_data.png" style="width: 80%;">
 
-### Carry-over effect
+### Carry-over Effect
 
 The effect of media decays very fast:
 
-
 <img src="plots/lag_mmm_data.png" style="width: 50%;">
 
-### Hill function
+### Hill Function
 
-While the effect of  newspaper spendings on sales saturate very fast, the sales keep increasing  for higher spendings in TV and radio. 
+While the effect of newspaper spending on sales saturates quickly, sales continue to increase with higher spending on TV and radio.
 
 <img src="plots/p_hill_mmm_data.png" style="width: 50%;">
 
-### Return of investment
+### Return on Investment
 
-Radio has clearly the highest rate of return. Thus, I might pay of to increase investment in radio. On the other hand, ROI in newspaper is very low and probably not worth it.
+Radio clearly has the highest rate of return, suggesting that increasing investment in radio may be beneficial. On the other hand, ROI in newspapers is very low and probably not worth it.
 
 <img src="plots/roi_mmm_data.png" style="width: 50%;">
 
-
-
-
-
-
-### Why Bayesian-
+### Why Bayesian?
 
 This project demonstrates the use of mixed marketing models to analyze the relationship between marketing channel spends and sales outcomes using a Bayesian framework.
 
-The benefits of Baysian Frameworks is:
-1. Allowing to add prior knowledge via priors.
-2. Build costumn models using PyMC or Stan.
-3. Related allows to formulize the generative model.
-4. Allows better uncertainty qunatization in model parameters and forecasts.
+The benefits of Bayesian frameworks include:
+1. Allowing the incorporation of prior knowledge via priors.
+2. Building custom models using PyMC or Stan.
+3. Enabling the formulation of generative models.
+4. Providing better uncertainty quantification in model parameters and forecasts.
 
-   ### Prerequisites
+### Prerequisites
 
 - R and RStudio installed on your machine.
-- Required R packages: `datarium`, `tidyr`, `PerformanceAnalytics`, `ggplot2`, `rstan`, `dplyr`, and some smaller other.
+- Required R packages: `datarium`, `tidyr`, `PerformanceAnalytics`, `ggplot2`, `rstan`, `dplyr`, and others.
 
-Check out the html file `Market_mix_modeling.html` for the results and `Market_mix_modeling.Rmd` for the code. 
+Check out the HTML file `Market_mix_modeling.html` for the results and `Market_mix_modeling.Rmd` for the code.
