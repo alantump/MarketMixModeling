@@ -14,25 +14,25 @@ In this project, I will:
 
 Marketing Mix Modeling, or Media Mix Modeling (MMM), is used by advertisers to measure how their media spending contributes to sales. In the classical framework, media contributions are estimated via a linear regression approach, where the beta estimates of the media channels describe their contribution:
 
-![Media Contribution](image.png)
+![Media Contribution](plots/image.png)
 
 ## Addstock
 
 More sophisticated models assume that the effect of media spending is not immediate but can lag. For example, a TV advertisement broadcasted a few weeks ago could still positively influence sales today. This Carryover effect in advertising is modeled via an adstock function:
 
-![Adstock Function](image-2.png)
+![Adstock Function](plots/image-2.png)
 
 with *w* being a weight for different lags *l*.
 
 The weights (*w*) are described by a decay function. The lower the decay parameter &alpha;, the longer the effect of an advertisement lasts:
 
-<img src="image-1.png" alt="Decay Function" style="width: 80%;">
+<img src="plots/image-1.png" alt="Decay Function" style="width: 80%;">
 
 ## Diminishing Returns
 
 Another important assumption is that media spending does not necessarily increase sales linearly. At some point, each additional dollar spent will have less effect. This is described by a Hill function:
 
-![Hill Function](image-3.png)
+![Hill Function](plots/image-3.png)
 
 with the parameter *K* describing the half-saturation point and *S* describing the slope.
 
@@ -191,6 +191,5 @@ The benefits of Bayesian frameworks include:
 ### Prerequisites
 
 - R and RStudio installed on your machine.
-- Required R packages: `datarium`, `tidyr`, `PerformanceAnalytics`, `ggplot2`, `rstan`, `dplyr`, and others.
+- Required R packages: `lubridate`, `tidyr`, `cowplot`, `ggplot2`, `rstan`, `dplyr`.
 
-Check out the HTML file `NNN_Stan2` for the code and `Market_mix_modeling.Rmd` for a analysis with BRMS.
