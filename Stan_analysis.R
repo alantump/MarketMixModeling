@@ -224,7 +224,7 @@ p2 <- df1 %>% select(values1, grouping_variable) %>%
   xlab("Investment in chanel") +
   facet_wrap(vars(grouping_variable),scales="free_x") 
 p2
-ggsave("plots/roi_mmm_data.png",p2, width = 3, height = 3)
+ggsave("plots/roi_mmm_data.png",p2, width = 5, height = 3)
 
 
 
