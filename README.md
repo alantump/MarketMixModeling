@@ -174,7 +174,7 @@ While the effect of newspaper spending on sales saturates quickly, sales continu
 
 ### Return on Investment
 
-Radio clearly has the highest rate of return, suggesting that increasing investment in radio may be beneficial. On the other hand, ROI in newspapers is very low and probably not worth it.
+Radio clearly has the highest rate of return, suggesting that increasing investment in radio may be beneficial. 
 
 <img src="plots/roi_mmm_data.png" style="width: 50%;">
 
