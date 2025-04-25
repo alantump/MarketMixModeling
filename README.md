@@ -200,3 +200,4 @@ The benefits of Bayesian frameworks include:
 - R and RStudio installed on your machine.
 - Required R packages: `lubridate`, `tidyr`, `cowplot`, `ggplot2`, `rstan`, `dplyr`.
 
+Check out the code in  `Stan_analysis.R`

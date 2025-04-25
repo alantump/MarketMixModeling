@@ -9,6 +9,11 @@ library(ggplot2)
 library(tidyr)
 library(cowplot)
 library(lubridate)
+library(purrr)
+library(ggExtra)
+library(viridis) 
+
+
 
 # Load data from the specified CSV file
 data <- read.csv("mmm.csv")
@@ -256,3 +261,161 @@ p2 <- data.frame(time = data$week_dt2, TV = data$TV, radio  = data$radio, newspa
 ggsave("plots/investment_mmm_data.png",p2, width = 5, height = 7)
 
       
+
+
+
+
+###
+#
+# Optimization
+#
+###
+n_sim =250 # number of posterior samples
+posterior_samples <- rstan::extract(m_hill)
+
+
+# Get relevant posterior parameters
+beta_media_posterior <- posterior_samples$beta_media[1:n_sim, ]
+ec_posterior <- posterior_samples$ec[1:n_sim, ]
+slope_posterior <- posterior_samples$slope[1:n_sim, ]
+intercept_posterior <- posterior_samples$intercept[1:n_sim]
+beta_ctrl_posterior <- posterior_samples$beta_ctrl[1:n_sim, ] # If you had control variables
+decay_posterior <- posterior_samples$decay
+
+
+
+
+adstock_function <- function(t, decay, max_lag) {
+  weights <- decay^((1:max_lag) ^ 2)
+  if (length(t) < max_lag) {
+    t <- c(rep(0, max_lag - length(t)), t) # Pad with zeros for shorter histories
+  } else if (length(t) > max_lag) {
+    t <- tail(t, max_lag) # Take the last max_lag periods
+  }
+  return(sum(t * weights) / sum(weights))
+}
+
+
+# Define budget
+# Lets say I don't want to change my average budget
+total_budget <- mean(data$TV) + mean(data$newspaper) + mean(data$radio)
+
+
+# Generates a grid of points uniformly distributed on a 3-dimensional simplex
+generate_simplex_grid <- function(n_grid = 7) {
+ 
+  u_vals <- seq(0.1, 1, length.out = n_grid)
+  v_vals <- seq(0, 1, length.out = n_grid)
+  
+  simplex_grid <- expand.grid(u = u_vals, v = v_vals) %>%
+    mutate(
+      p1 = 1 - u,
+      p2 = u * (1 - v),
+      p3 = u * v
+    ) %>%
+    select(p1, p2, p3)
+  
+  return(simplex_grid)
+}
+
+simplex_grid = generate_simplex_grid(20)
+
+# Create different budget allocation scenarios (proportions)
+budget_scenarios <- data.frame(
+  tv_prop = simplex_grid$p1,
+  newspaper_prop = simplex_grid$p2,
+  radio_prop = simplex_grid$p3
+)
+
+
+# Ensure proportions sum to 1 and use reasonable proportions
+budget_scenarios <- budget_scenarios %>%
+  mutate(total_prop = tv_prop + newspaper_prop + radio_prop) %>%
+  filter(abs(total_prop - 1) < 1e-6) %>%
+  filter( newspaper_prop <= 0.5) %>% # more is unrealistic
+  filter( radio_prop <= 0.5) %>%
+  select(-total_prop)
+
+# Simulate sales and ROI for each scenario
+simulation_results <- list()
+
+for (i in 1:nrow(budget_scenarios)) {
+  scenario <- budget_scenarios[i, ]
+  scenario_sales <- numeric(n_sim)
+  scenario_investment <- total_budget
+  
+  for (s in 1:n_sim) {
+    # Apply the budget allocation to get channel-specific spending
+    tv_spend <- scenario$tv_prop * scenario_investment
+    newspaper_spend <- scenario$newspaper_prop * scenario_investment
+    radio_spend <- scenario$radio_prop * scenario_investment
+    
+    # Assume a constant recent spending for simplicity in this illustration
+    # In a real application, you'd simulate future spending patterns
+    recent_tv <- rep(tv_spend, length(data$week_dt))
+    recent_newspaper <- rep(newspaper_spend, length(data$week_dt))
+    recent_radio <- rep(radio_spend, length(data$week_dt))
+    
+    # Calculate the cumulative effects for this simulation
+    tv_adstocked <- hill_function(adstock_function(recent_tv, decay_posterior[s, 1], max_lag), ec_posterior[s, 1], slope_posterior[s, 1])
+    newspaper_adstocked <- hill_function(adstock_function(recent_newspaper, decay_posterior[s, 2], max_lag), ec_posterior[s, 2], slope_posterior[s, 2])
+    radio_adstocked <- hill_function(adstock_function(recent_radio, decay_posterior[s, 3], max_lag), ec_posterior[s, 3], slope_posterior[s, 3])
+    
+    # Simulate sales
+    # Assuming no change in control variables for simplicity 
+      simulated_sales <- intercept_posterior[s] +
+      beta_media_posterior[s, 1] * tv_adstocked +
+      beta_media_posterior[s, 3] * newspaper_adstocked +
+      beta_media_posterior[s, 2] * radio_adstocked 
+    
+    scenario_sales[s] <- simulated_sales
+  }
+  
+  # Calculate ROI (Incremental Sales / Investment)
+  baseline_sales_posterior <- intercept_posterior 
+  incremental_sales_posterior <- scenario_sales - mean(baseline_sales_posterior) # Using mean for simplicity
+  
+  scenario_roi_posterior <- incremental_sales_posterior / scenario_investment
+  
+  simulation_results[[i]] <- data.frame(
+    tv_prop = scenario$tv_prop,
+    newspaper_prop = scenario$newspaper_prop,
+    radio_prop = scenario$radio_prop,
+    roi = scenario_roi_posterior
+  )
+}
+
+# Combine results
+roi_comparison <- bind_rows(simulation_results)
+
+
+
+
+
+roi_opt <- ggplot(roi_comparison, aes(x = (tv_prop), y = roi, color = ((radio_prop)))) +
+  geom_point(alpha = 0.04) +
+  geom_smooth(color = "red") +
+  facet_grid(. ~ round(newspaper_prop, 1)) + # Create facet grid based on rounded newspaper_prop
+  scale_color_viridis(option = "D") + # Use the "D" option from viridis
+  labs(
+    title = "Posterior Distribution of ROI \nNewspaper Proportion",
+    x = "Proportion of Budget allocated to TV",
+    y = "Return on Investment",
+    color = "Radio Proportion"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Adjust x-axis labels if needed
+
+ggsave("plots/ROI_optimum.png",roi_opt, width = 8, height = 5)
+
+
+average_roi_by_allocation <- roi_comparison %>%
+  group_by(tv_prop, newspaper_prop, radio_prop) %>%
+  summarise(average_roi = mean(roi), low = quantile(roi, prob = 0.025), high = quantile(roi, prob = 0.975), .groups = 'drop')
+
+# Find the maximum average ROI
+max_average_roi <- average_roi_by_allocation %>%
+  slice_max(average_roi, n = 1)
+
+print("Maximum Average ROI:")
+print(max_average_roi)
