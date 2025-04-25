@@ -182,7 +182,7 @@ Radio clearly has the highest rate of return, suggesting that increasing investm
 
 To identify the optimal investment allocation, I used a Monte Carlo simulation. By sampling from the posterior distributions of the model parameters, I quantified the uncertainty in ROI for various budget mixes. The analysis suggests that maximizing sales increase per investment is achieved with approximately 70% allocated to TV, 30% to radio, and minimal (or zero) investment in newspaper. This allocation allows an estimated average increase in sales per investment of 0.061, with a 95% probability interval between 0.054 and 0.071. The distribution of simulated ROIs for different allocations is visualized below.
 
-<img src="plots/ROI_optimum.png" style="width: 50%;">
+<img src="plots/ROI_optimum.png" style="width: 90%;">
 
 
 ### Why Bayesian?
