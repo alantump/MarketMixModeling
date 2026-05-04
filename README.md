@@ -1,14 +1,19 @@
 
 # Using RStan for a Bayesian Approach to Media Mix Modeling with Carryover and Shape Effects
 
-This project is inspired by the model descriptions provided by Jin et al., 2017. It is implemented in R but can be easily adapted to Python.
+This project is inspired by the model descriptions provided by Jin et al., 2017. It is implemented in R but can be easily adapted to Python. 
+**Note:** This is a work in progress and an exploratory project for learning purposes. Several steps of a rigorous Bayesian workflow are simplified or omitted intentionally.
 
 ## Project Overview
 
 In this project, I will:
-1. Demonstrate how to fit a Bayesian Media Mix Model (MMM) to estimate channel contributions to sales, incorporating Carryover and Shape Effects.
+1. Demonstrate how to fit a Bayesian Media Mix Model (MMM) to estimate channel contributions to sales, incorporating Carryover (adstock) and Shape Effects.
 2. Show how to calculate important Key Performance Indicators (KPIs).
 3. Discuss the results and investment optimization strategies.
+
+## Code
+
+Find the code here:`Stan_analysis.R`
 
 ## Introduction
 
@@ -16,7 +21,7 @@ Marketing Mix Modeling, or Media Mix Modeling (MMM), is used by advertisers to m
 
 ![Media Contribution](plots/image.png)
 
-## Addstock
+## Adstock
 
 More sophisticated models assume that the effect of media spending is not immediate but can lag. For example, a TV advertisement broadcasted a few weeks ago could still positively influence sales today. This Carryover effect in advertising is modeled via an adstock function:
 
@@ -50,7 +55,7 @@ The final model has the following parameters:
 
 ## Data
 
-I explored the data posted on this Git repository. It describes weekly sales over approximately 4 years with investments in TV, newspaper, and radio:
+I explored data from a Kaggle repository as a toy example. It describes weekly sales over approximately 4 years with investments in TV, newspaper, and radio:
 
 <img src="plots/sales_mmm_data.png" style="width: 80%;">
 
@@ -62,41 +67,42 @@ We can now model the effect of media spending on sales with our model written in
 
 ```stan
 functions {
-  // the Hill function
+  // Hill function for diminishing returns
   real Hill(real t, real ec, real slope) {
     return 1 / (1 + (t / ec)^(-slope));
   }
-  // the adstock transformation with a vector of weights
+  // Adstock transformation for carryover effects
   real Adstock(vector t, row_vector weights) {
     return dot_product(t, weights) / sum(weights);
   }
 }
 
 data {
-  int<lower=1> N;
-  real y[N]; // the vector of sales
-  int<lower=1> max_lag; // the maximum duration of lag effect, in weeks
-  int<lower=1> num_media; // the number of media channels
-  matrix[N + max_lag -1, num_media] X_media; // matrix of media variables
-  int<lower=1> num_ctrl; // the number of other control variables
-  matrix[N, num_ctrl] X_ctrl; // a matrix of control variables
+  int<lower=1> N; // Number of observations
+  real y[N]; // Sales vector
+  int<lower=1> max_lag; // Maximum lag duration
+  int<lower=1> num_media; // Number of media channels
+  matrix[N + max_lag -1, num_media] X_media; // Media variables matrix
+  int<lower=1> num_ctrl; // Number of control variables
+  matrix[N, num_ctrl] X_ctrl; // Control variables matrix
 }
 
 parameters {
-  real<lower=0> noise_var; // residual variance
-  real intercept; // the intercept
-  vector[num_media] beta_media; // the coefficients for media variables
-  vector[num_ctrl] beta_ctrl; // the coefficients for control variables
-  vector<lower=0,upper=1>[num_media] decay; // the decay parameter for adstock
-  vector<lower=0>[num_media] ec; // hill
-  vector<lower=0>[num_media] slope;
+  real<lower=0> sigma; // Residual variance
+  real intercept; // Intercept
+  vector[num_media] beta_media; // Coefficients for media variables
+  vector[num_ctrl] beta_ctrl; // Coefficients for control variables
+  vector<lower=0,upper=1>[num_media] decay; // Decay parameter for adstock
+  vector<lower=0>[num_media] ec; // Hill function parameter
+  vector<lower=0>[num_media] slope; // Hill function slope
 }
 
 transformed parameters {
-  real cum_effect;
-  row_vector[max_lag] lag_weights;
-  matrix[N, num_media] cum_effects_hill;
-  real mu[N];
+  real cum_effect; // Cumulative media effect
+  row_vector[max_lag] lag_weights; // Lag weights
+  matrix[N, num_media] cum_effects_hill; // Cumulative effects after Hill transformation
+  real mu[N]; // Predicted sales
+
   for (nn in 1:N) {
     for (media in 1:num_media) {
       for (lag in 1:max_lag) {
@@ -105,52 +111,70 @@ transformed parameters {
       cum_effect <- Adstock(sub_col(X_media, nn, media, max_lag), lag_weights);
       cum_effects_hill[nn, media] <- Hill(cum_effect, ec[media], slope[media]);
     }
-    mu[nn] <- intercept + dot_product(cum_effects_hill[nn], beta_media) +
-    dot_product(X_ctrl[nn], beta_ctrl);
-  } 
+    mu[nn] <- intercept + dot_product(cum_effects_hill[nn], beta_media) + dot_product(X_ctrl[nn], beta_ctrl);
+  }
 }
 
 model {
   decay ~ beta(3,10);
   intercept ~ normal(0, 5);
-  beta_media ~ normal(0, 1);
-  beta_ctrl ~ normal(0, 1);
-  noise_var ~ inv_gamma(0.05, 0.05 * 0.01);
-  slope ~ normal(1,0.3);
-  ec ~ gamma(4, 0.1);
-  y ~ normal(mu, sqrt(noise_var));
+  beta_media ~ normal(0, 5);
+  beta_ctrl ~ normal(0, 5);
+  sigma ~ normal(0, 5);
+  slope ~ normal(1,5);
+  ec ~ gamma(4, 0.05);
+  y ~ normal(mu, sigma);
 }
 
 generated quantities {
-  real cum_effect2;
-  row_vector[max_lag] lag_weights2;
-  matrix[N, num_media] cum_effects_hill2;
-  matrix[N, num_media] media_contr;
-  real tot[N];
-  real contr[N];
+  array[N] real y_rep;
+
+  // Log-likelihood for LOO-CV model comparison
+  vector[N] log_lik;
   
+  vector[N] tot;        
+  vector[N] base_contr; 
+  matrix[N, num_media] media_contr; 
   for (nn in 1:N) {
+
+     tot[nn] = intercept 
+              + dot_product(cum_effects_hill[nn], beta_media) 
+              + dot_product(X_ctrl[nn], beta_ctrl);
+
+      base_contr[nn] = intercept + dot_product(X_ctrl[nn], beta_ctrl);
+
     for (media in 1:num_media) {
-      for (lag in 1:max_lag) {
-        lag_weights2[lag] <- pow(decay[media], (lag) ^ 2);
-      }
-      cum_effect2 <- Adstock(sub_col(X_media, nn, media, max_lag), lag_weights2);
-      cum_effects_hill2[nn, media] <- Hill(cum_effect2, ec[media], slope[media]);
+      vector[num_media] effects_without;
+      effects_without = cum_effects_hill[nn]';  
+      effects_without[media] = 0;            
+      
+      media_contr[nn, media] = intercept 
+                               + dot_product(effects_without, beta_media) 
+                               + dot_product(X_ctrl[nn], beta_ctrl);
     }
-    tot[nn] <- intercept + dot_product(cum_effects_hill2[nn], beta_media) +
-    dot_product(X_ctrl[nn], beta_ctrl);
-    contr[nn] <- intercept + dot_product(X_ctrl[nn], beta_ctrl);
-    media_contr[nn, 1] <- intercept + dot_product([0, cum_effects_hill2[nn,2],cum_effects_hill2[nn,3]], beta_media) +
-    dot_product(X_ctrl[nn], beta_ctrl);
-    media_contr[nn, 2] <- intercept + dot_product([cum_effects_hill2[nn,1],0,cum_effects_hill2[nn,3]], beta_media) +
-    dot_product(X_ctrl[nn], beta_ctrl);
-    media_contr[nn, 3] <- intercept + dot_product([cum_effects_hill2[nn,1],cum_effects_hill2[nn,2],0], beta_media) +
-    dot_product(X_ctrl[nn], beta_ctrl);
-  } 
+
+    // Posterior predictives
+    y_rep[nn] = normal_rng(tot[nn], sigma);
+
+    // likelihood
+    log_lik[nn] = normal_lpdf(y[nn] | tot[nn], sigma);
+  }
 }
 ```
 
 ## Results
+
+### Posterior Predictive Checks
+
+The model recovers overall mean sales and variance reasonably well but 
+systematically over-estimates extreme values. This likely 
+reflects model misspecification — possible causes include missing 
+seasonality terms or a non-normal likelihood. This is left as is for 
+this exploratory project.
+
+
+<img src="plots/post_pred.png" style="width: 80%;">
+
 
 ### Sales Contribution
 
@@ -180,14 +204,24 @@ Radio clearly has the highest rate of return, suggesting that increasing investm
 
 ### Optimization 
 
-To identify the optimal investment allocation, I used a Monte Carlo simulation. By sampling from the posterior distributions of the model parameters, I quantified the uncertainty in ROI for various budget mixes. The analysis suggests that maximizing sales increase per investment is achieved with approximately 70% allocated to TV, 30% to radio, and minimal (or zero) investment in newspaper. This allocation allows an estimated average increase in sales per investment of 0.061, with a 95% probability interval between 0.054 and 0.071. The distribution of simulated ROIs for different allocations is visualized below.
+To identify the optimal investment allocation, I used the `optim` function 
+in R with a BFGS algorithm, starting from multiple random initializations 
+to avoid local optima. Budget allocations were enforced to sum to the 
+historical total via a softmax transformation, and expected incremental 
+sales were computed across 250 posterior samples. The analysis suggests 
+that maximizing sales is achieved with approximately 36% allocated to TV, 
+64% to radio, and minimal or no investment in newspaper.
 
-<img src="plots/ROI_optimum.png" style="width: 90%;">
+<img src="plots/allocation_comparison.png" style="width: 90%;">
+
+We predict the optimal allocation will with a 92% probability lead to an increase sales by at least 10.  
+
+<img src="plots/optimal_incremental_sales.png" style="width: 90%;">
 
 
 ### Why Bayesian?
 
-This project demonstrates the use of mixed marketing models to analyze the relationship between marketing channel spends and sales outcomes using a Bayesian framework.
+This project demonstrates the use of mixed marketing models to analyze the relationship between marketing channel spends and sales outcomes using a Bayesian framework. I actually skipped quite some important steps in the Bayesian Worksflow for simplicity. 
 
 The benefits of Bayesian frameworks include:
 1. Allowing the incorporation of prior knowledge via priors.
@@ -200,4 +234,3 @@ The benefits of Bayesian frameworks include:
 - R and RStudio installed on your machine.
 - Required R packages: `lubridate`, `tidyr`, `cowplot`, `ggplot2`, `rstan`, `dplyr`.
 
-Check out the code in  `Stan_analysis.R`
