@@ -214,14 +214,14 @@ that maximizing sales is achieved with approximately 36% allocated to TV,
 
 <img src="plots/allocation_comparison.png" style="width: 90%;">
 
-We predict the optimal allocation will with a 92% probability lead to an increase sales by at least 10.  
+We predict the optimal allocation will, with a 92% probability, lead to an increase in sales by at least 10.  
 
 <img src="plots/optimal_incremental_sales.png" style="width: 90%;">
 
 
 ### Why Bayesian?
 
-This project demonstrates the use of mixed marketing models to analyze the relationship between marketing channel spends and sales outcomes using a Bayesian framework. I actually skipped quite some important steps in the Bayesian Worksflow for simplicity. 
+This project demonstrates the use of mixed marketing models to analyze the relationship between marketing channel spends and sales outcomes using a Bayesian framework. I actually skipped quite some important steps in the Bayesian Workflow for simplicity. 
 
 The benefits of Bayesian frameworks include:
 1. Allowing the incorporation of prior knowledge via priors.
